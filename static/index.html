@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpeedGauge</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/favicon.svg">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+:root {
+  --bg: #f8fafc; --bg2: #ffffff; --bg3: #f1f5f9;
+  --text: #0f172a; --text2: #475569; --text3: #94a3b8;
+  --border: #e2e8f0; --accent: #3b82f6; --accent2: #2563eb;
+  --green: #10b981; --red: #ef4444; --orange: #f59e0b;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow2: 0 4px 6px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+  --radius: 12px;
+  --gauge-track: #e2e8f0;
+}
+[data-theme="dark"] {
+  --bg: #0f172a; --bg2: #1e293b; --bg3: #334155;
+  --text: #f1f5f9; --text2: #94a3b8; --text3: #64748b;
+  --border: #334155; --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow2: 0 4px 6px rgba(0,0,0,0.3);
+  --gauge-track: #334155;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; }
+a { color:var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+
+/* Header */
+.header { background:var(--bg2); border-bottom:1px solid var(--border); padding:0 16px; height:56px; box-shadow:var(--shadow); position:sticky; top:0; z-index:100; }
+.header-inner { max-width:1200px; margin:0 auto; padding:0 16px; display:flex; align-items:center; justify-content:space-between; height:100%; }
+.header h1 { font-size:18px; font-weight:700; display:flex; align-items:center; gap:8px; white-space:nowrap; }
+.header h1 svg { width:24px; height:24px; flex-shrink:0; }
+.header-right { display:flex; align-items:center; gap:8px; }
+
+/* Nav */
+nav { display:flex; gap:2px; }
+nav button { background:none; border:none; padding:6px 12px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:500; color:var(--text2); transition:all 0.2s; }
+nav button:hover { background:var(--bg3); color:var(--text); }
+nav button.active { background:var(--accent); color:#fff; }
+
+/* Theme toggle */
+.theme-btn { background:none; border:1px solid var(--border); width:34px; height:34px; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text2); transition:all 0.2s; flex-shrink:0; }
+.theme-btn:hover { background:var(--bg3); color:var(--text); }
+
+/* Main */
+.main { max-width:1200px; margin:0 auto; padding:16px; flex:1; width:100%; }
+.page { display:none; }
+.page.active { display:block; }
+
+/* Cards */
+.cards { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:16px; }
+.card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); }
+.card-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); margin-bottom:6px; }
+.card-value { font-size:28px; font-weight:700; line-height:1.1; }
+.card-unit { font-size:13px; font-weight:400; color:var(--text2); margin-left:3px; }
+
+/* Test button */
+.test-btn { background:var(--accent); color:#fff; border:none; padding:8px 20px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.test-btn:hover { background:var(--accent2); }
+.test-btn:disabled { opacity:0.6; cursor:not-allowed; }
+
+/* Gauge */
+.progress-container { display:none; margin-bottom:16px; }
+.progress-container.active { display:block; }
+.gauge-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); }
+.gauge-wrap { display:flex; flex-direction:column; align-items:center; gap:16px; }
+.gauge-svg-wrap { position:relative; width:300px; height:180px; }
+.gauge-svg-wrap svg { width:100%; height:100%; }
+.gauge-center { display:none; }
+.gauge-results { display:flex; gap:24px; align-items:center; flex-wrap:wrap; justify-content:center; }
+.gauge-result-item { text-align:center; min-width:80px; }
+.gauge-result-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); margin-bottom:4px; display:flex; align-items:center; justify-content:center; gap:4px; }
+.gauge-result-value { font-size:24px; font-weight:700; }
+.gauge-result-unit { font-size:12px; color:var(--text2); }
+.gauge-result-item.dl .gauge-result-value { color:#3b82f6; }
+.gauge-result-item.ul .gauge-result-value { color:#10b981; }
+.gauge-result-item.ping .gauge-result-value { color:#f59e0b; }
+.gauge-result-item.inactive { opacity:0.25; }
+.gauge-starting { text-align:center; padding:30px 20px; color:var(--text2); font-size:14px; font-weight:500; display:flex; align-items:center; justify-content:center; gap:8px; }
+.spinner { width:18px; height:18px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Chart */
+.chart-container { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); }
+.chart-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+.chart-title { font-size:15px; font-weight:600; }
+.period-btns { display:flex; gap:3px; }
+.period-btns button { background:var(--bg3); border:1px solid var(--border); padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:500; color:var(--text2); transition:all 0.2s; }
+.period-btns button:hover { color:var(--text); }
+.period-btns button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+/* History table */
+.table-wrap { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); overflow-x:auto; box-shadow:var(--shadow); }
+table { width:100%; border-collapse:collapse; min-width:500px; }
+th { background:var(--bg3); padding:10px 12px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); white-space:nowrap; }
+th.sortable { cursor:pointer; user-select:none; }
+th.sortable:hover { color:var(--text); }
+td { padding:10px 12px; border-top:1px solid var(--border); font-size:13px; white-space:nowrap; }
+tr:hover td { background:var(--bg3); }
+.export-btn { background:var(--bg2); border:1px solid var(--border); padding:6px 14px; border-radius:8px; cursor:pointer; font-size:12px; color:var(--text2); transition:all 0.2s; }
+.export-btn:hover { background:var(--bg3); color:var(--text); }
+
+/* Settings */
+.settings-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:16px; }
+.settings-section { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); }
+.settings-section h3 { font-size:15px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+.form-group { margin-bottom:14px; }
+.form-group label { display:block; font-size:12px; font-weight:500; color:var(--text2); margin-bottom:4px; }
+.form-group input, .form-group select { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--bg); color:var(--text); outline:none; transition:border 0.2s; }
+.form-group input:focus, .form-group select:focus { border-color:var(--accent); }
+.form-group .hint { font-size:11px; color:var(--text3); margin-top:3px; }
+.save-btn { background:var(--green); color:#fff; border:none; padding:10px 24px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+.save-btn:hover { opacity:0.9; }
+
+/* Login modal */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:300; align-items:center; justify-content:center; backdrop-filter:blur(4px); }
+.modal-overlay.show { display:flex; }
+.modal { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:28px; width:340px; max-width:90vw; box-shadow:var(--shadow2); }
+.modal h3 { font-size:18px; font-weight:700; margin-bottom:4px; }
+.modal p { font-size:13px; color:var(--text2); margin-bottom:16px; }
+.modal input { width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--bg); color:var(--text); outline:none; margin-bottom:14px; }
+.modal input:focus { border-color:var(--accent); }
+.modal-btns { display:flex; gap:8px; justify-content:flex-end; }
+.modal .login-btn { background:var(--accent); color:#fff; border:none; padding:10px 20px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
+.modal .cancel-btn { background:var(--bg3); color:var(--text2); border:1px solid var(--border); padding:10px 20px; border-radius:8px; font-size:14px; cursor:pointer; }
+.login-error { color:var(--red); font-size:13px; margin-bottom:10px; display:none; }
+
+/* Toast */
+.toast { position:fixed; bottom:16px; right:16px; background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:10px 18px; box-shadow:var(--shadow2); font-size:13px; transform:translateY(100px); opacity:0; transition:all 0.3s; z-index:200; }
+.toast.show { transform:translateY(0); opacity:1; }
+.toast.success { border-left:4px solid var(--green); }
+.toast.error { border-left:4px solid var(--red); }
+
+/* Server info bar */
+.server-bar { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; font-size:12px; color:var(--text2); }
+.server-bar span { display:flex; align-items:center; gap:4px; }
+
+/* Responsive */
+@media (max-width:768px) {
+  .main { padding:12px; }
+  .cards { grid-template-columns:1fr 1fr; gap:8px; }
+  .card { padding:12px; }
+  .card-value { font-size:22px; }
+  .card-unit { font-size:11px; }
+  .settings-grid { grid-template-columns:1fr; }
+  .header h1 { font-size:16px; }
+  .header h1 span { display:none; }
+  nav button { padding:5px 8px; font-size:12px; }
+  .gauge-svg-wrap { width:240px; height:144px; }
+  .gauge-center-speed { font-size:28px; }
+  .gauge-results { gap:16px; }
+  .gauge-result-value { font-size:20px; }
+  .gauge-wrap { gap:12px; }
+  .chart-container { padding:12px; }
+  td, th { padding:8px 10px; font-size:12px; }
+}
+@media (max-width:400px) {
+  .cards { grid-template-columns:1fr 1fr; }
+  .gauge-svg-wrap { width:200px; height:120px; }
+  .gauge-center-speed { font-size:24px; }
+  .gauge-result-value { font-size:18px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+  <h1>
+    <img id="headerLogo" src="/logo-white.svg" alt="SpeedGauge" style="height:28px;">
+  </h1>
+  <div class="header-right">
+    <nav>
+      <button class="active" onclick="showPage('dashboard')">Dashboard</button>
+      <button onclick="showPage('history')">History</button>
+      <button onclick="showPage('settings')">Settings</button>
+    </nav>
+    <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme" id="themeBtn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path id="themeIcon" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+    </button>
+  </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="main">
+<div class="page active" id="page-dashboard">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+    <div>
+      <h2 style="font-size:20px; font-weight:700;">Dashboard</h2>
+      <p style="font-size:12px; color:var(--text3); margin-top:2px;" id="lastTestTime"></p>
+    </div>
+    <button class="test-btn" id="testBtn" onclick="runTest()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+      Run Test
+    </button>
+  </div>
+
+  <div class="progress-container" id="progressContainer">
+    <div class="gauge-card">
+      <div class="gauge-starting" id="gaugeStarting"><div class="spinner"></div> Connecting to server...</div>
+      <div id="gaugeContent" style="display:none;">
+        <div class="gauge-wrap">
+          <div class="gauge-svg-wrap">
+            <svg viewBox="0 0 300 175" id="gaugeSvg">
+              <!-- Fat track -->
+              <path d="M 25 150 A 125 125 0 0 1 275 150" fill="none" stroke="var(--gauge-track)" stroke-width="30" stroke-linecap="round"/>
+              <!-- Download arc (blue) -->
+              <path id="gaugeArcDl" d="M 25 150 A 125 125 0 0 1 275 150" fill="none" stroke="#3b82f6" stroke-width="30" stroke-linecap="round" stroke-dasharray="0 393" opacity="0.85"/>
+              <!-- Upload arc (green, inner) -->
+              <path id="gaugeArcUl" d="M 25 150 A 125 125 0 0 1 275 150" fill="none" stroke="#10b981" stroke-width="14" stroke-linecap="round" stroke-dasharray="0 393" opacity="0.9"/>
+              <!-- Download needle -->
+              <line id="needleDl" x1="150" y1="150" x2="150" y2="50" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" transform="rotate(-90, 150, 150)" style="transition:transform 0.4s ease-out;"/>
+              <!-- Upload needle -->
+              <line id="needleUl" x1="150" y1="150" x2="150" y2="58" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" transform="rotate(-90, 150, 150)" style="transition:transform 0.4s ease-out;" opacity="0.85"/>
+              <!-- Center dot -->
+              <circle cx="150" cy="150" r="7" fill="var(--text)"/>
+              <circle cx="150" cy="150" r="3" fill="var(--bg2)"/>
+              <!-- Scale labels hidden -->
+              <text x="0" y="0" font-size="0" id="gaugeMid"></text>
+              <text x="0" y="0" font-size="0" id="gaugeMax"></text>
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-center-phase" id="gaugePhase">PING</div>
+              <div class="gauge-center-speed" id="gaugeSpeed">—</div>
+              <div class="gauge-center-unit" id="gaugeUnit">Mbps</div>
+            </div>
+          </div>
+          <div class="gauge-results">
+            <div class="gauge-result-item dl inactive" id="gResDown">
+              <div class="gauge-result-label">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m0 0l-5-5m5 5l5-5"/></svg>
+                Download
+              </div>
+              <div class="gauge-result-value" id="gResDownVal">—</div>
+              <div class="gauge-result-unit">Mbps</div>
+            </div>
+            <div class="gauge-result-item ul inactive" id="gResUp">
+              <div class="gauge-result-label">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5m0 0l-5 5m5-5l5 5"/></svg>
+                Upload
+              </div>
+              <div class="gauge-result-value" id="gResUpVal">—</div>
+              <div class="gauge-result-unit">Mbps</div>
+            </div>
+            <div class="gauge-result-item ping inactive" id="gResPing">
+              <div class="gauge-result-label">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                Ping
+              </div>
+              <div class="gauge-result-value" id="gResPingVal">—</div>
+              <div class="gauge-result-unit">ms</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="server-bar" id="serverBar"></div>
+
+  <div class="cards" id="resultCards">
+    <div class="card">
+      <div class="card-label">Download</div>
+      <div class="card-value" id="cardDown">—<span class="card-unit">Mbps</span></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Upload</div>
+      <div class="card-value" id="cardUp">—<span class="card-unit">Mbps</span></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Ping</div>
+      <div class="card-value" id="cardPing">—<span class="card-unit">ms</span></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Jitter</div>
+      <div class="card-value" id="cardJitter">—<span class="card-unit">ms</span></div>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <div class="chart-header">
+      <span class="chart-title">Speed History</span>
+      <div class="period-btns" id="periodBtns">
+        <button class="active" data-period="24h">24h</button>
+        <button data-period="7d">7d</button>
+        <button data-period="30d">30d</button>
+      </div>
+    </div>
+    <div style="position:relative; height:250px;">
+      <canvas id="speedChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div class="page" id="page-history">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+    <h2 style="font-size:20px; font-weight:700;">Test History</h2>
+    <button class="export-btn" onclick="exportData()">Export CSV</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="sortable" onclick="sortHistory('timestamp')">Date <span id="sort-timestamp">▼</span></th>
+          <th class="sortable" onclick="sortHistory('download_mbps')">Download <span id="sort-download_mbps"></span></th>
+          <th class="sortable" onclick="sortHistory('upload_mbps')">Upload <span id="sort-upload_mbps"></span></th>
+          <th class="sortable" onclick="sortHistory('ping_ms')">Ping <span id="sort-ping_ms"></span></th>
+          <th>Server</th>
+          <th>Link</th>
+        </tr>
+      </thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </div>
+  <div style="display:flex; justify-content:center; gap:6px; margin-top:12px;" id="historyPagination"></div>
+</div>
+
+<!-- SETTINGS -->
+<div class="page" id="page-settings">
+  <h2 style="font-size:20px; font-weight:700; margin-bottom:16px;">Settings</h2>
+  <div class="settings-grid">
+    <div class="settings-section">
+      <h3>General</h3>
+      <div class="form-group">
+        <label>Test Interval (minutes)</label>
+        <input type="number" id="cfg_interval_minutes" min="10" max="1440">
+        <div class="hint">How often to run automatic speed tests (10-1440)</div>
+      </div>
+      <div class="form-group">
+        <label>Speedtest Server</label>
+        <select id="cfg_server_id"><option value="">Auto (nearest)</option></select>
+        <div class="hint">Leave as Auto to use the nearest server</div>
+      </div>
+      <div class="form-group">
+        <label>Data Retention (days)</label>
+        <input type="number" id="cfg_retention_days" min="0">
+        <div class="hint">0 = keep forever</div>
+      </div>
+      <div class="form-group">
+        <label>Admin Password</label>
+        <input type="password" id="cfg_admin_password" placeholder="Leave empty to disable">
+        <div class="hint">Protects Settings page. Leave empty for no protection.</div>
+        <div id="demoPasswordNotice" style="display:none; color:#e67e22; font-size:12px; margin-top:4px;">Demo mode — admin password cannot be changed.</div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>MQTT (Home Assistant)</h3>
+      <div class="form-group">
+        <label>Broker Address</label>
+        <input type="text" id="cfg_mqtt_broker" placeholder="e.g. 10.0.0.100">
+      </div>
+      <div class="form-group">
+        <label>Port</label>
+        <input type="number" id="cfg_mqtt_port" value="1883">
+      </div>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="cfg_mqtt_user">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="cfg_mqtt_pass">
+      </div>
+      <div class="form-group">
+        <label>Topic Prefix</label>
+        <input type="text" id="cfg_mqtt_topic_prefix" value="speed_monitor">
+      </div>
+      <div class="form-group">
+        <label>HA Discovery Prefix</label>
+        <input type="text" id="cfg_mqtt_ha_discovery_prefix" value="homeassistant">
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Notifications</h3>
+      <div class="form-group">
+        <label>Telegram Bot Token</label>
+        <input type="password" id="cfg_telegram_bot_token">
+      </div>
+      <div class="form-group">
+        <label>Telegram Chat ID</label>
+        <input type="text" id="cfg_telegram_chat_id">
+      </div>
+      <div class="form-group">
+        <label>Webhook URL</label>
+        <input type="url" id="cfg_webhook_url" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label>Notify on every test</label>
+        <select id="cfg_notify_on_complete"><option value="false">No</option><option value="true">Yes</option></select>
+      </div>
+      <div class="form-group">
+        <label>Notify when below threshold</label>
+        <select id="cfg_notify_on_threshold"><option value="false">No</option><option value="true">Yes</option></select>
+      </div>
+      <div class="form-group">
+        <label>Download Threshold (Mbps)</label>
+        <input type="number" id="cfg_threshold_download_mbps" min="0" step="0.1">
+        <div class="hint">0 = disabled</div>
+      </div>
+      <div class="form-group">
+        <label>Upload Threshold (Mbps)</label>
+        <input type="number" id="cfg_threshold_upload_mbps" min="0" step="0.1">
+        <div class="hint">0 = disabled</div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:16px; display:flex; justify-content:flex-end;">
+    <button class="save-btn" onclick="saveSettings()">Save Settings</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="loginModal">
+  <div class="modal">
+    <h3>Admin Login</h3>
+    <p>Enter the admin password to access settings.</p>
+    <div class="login-error" id="loginError">Invalid password</div>
+    <input type="password" id="loginPassword" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="modal-btns">
+      <button class="cancel-btn" onclick="closeLogin()">Cancel</button>
+      <button class="login-btn" onclick="doLogin()">Login</button>
+    </div>
+  </div>
+</div>
+
+<footer style="text-align:center; padding:16px; font-size:11px; color:var(--text3);">&copy; 2025 SpeedGauge</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api';
+let chart = null;
+let currentPeriod = '24h';
+let historyPage = 0;
+const PAGE_SIZE = 50;
+let historySortBy = 'timestamp';
+let historySortDir = 'desc';
+let pollTimer = null;
+let sessionToken = localStorage.getItem('sm-session') || '';
+
+// Gauge constants
+const ARC_LEN = 393; // approx arc length of semicircle r=125
+let gaugeMaxSpeed = 10000; // auto-set from API
+
+async function fetchGaugeMax() {
+  try {
+    const res = await api(`/gauge-max?_t=${Date.now()}`);
+    gaugeMaxSpeed = res.max;
+  } catch(e) {}
+}
+
+function setGaugeMax(speed) {
+  // no-op, max is set by fetchGaugeMax
+}
+
+function speedToAngle(speed) {
+  // Map 0..gaugeMaxSpeed to -90..90 degrees
+  const pct = Math.min(speed / gaugeMaxSpeed, 1);
+  return -90 + (pct * 180);
+}
+
+function speedToArc(speed) {
+  const pct = Math.min(speed / gaugeMaxSpeed, 1);
+  return (pct * ARC_LEN) + ' ' + ARC_LEN;
+}
+
+// Auth
+function setSession(token) {
+  sessionToken = token;
+  if (token) localStorage.setItem('sm-session', token);
+  else localStorage.removeItem('sm-session');
+}
+
+async function authApi(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (sessionToken) headers['X-Session-Token'] = sessionToken;
+  const res = await fetch(API + path, { cache: 'no-store', ...opts, headers });
+  if (res.status === 401) {
+    setSession('');
+    showLoginModal();
+    throw new Error('Auth required');
+  }
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}
+
+function showLoginModal() {
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginModal').classList.add('show');
+  setTimeout(() => document.getElementById('loginPassword').focus(), 100);
+}
+
+function closeLogin() {
+  document.getElementById('loginModal').classList.remove('show');
+  showPage('dashboard');
+}
+
+async function doLogin() {
+  const pw = document.getElementById('loginPassword').value;
+  try {
+    const res = await api('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+    setSession(res.token);
+    document.getElementById('loginModal').classList.remove('show');
+    toast('Logged in!');
+    loadSettings();
+  } catch(e) {
+    document.getElementById('loginError').style.display = 'block';
+  }
+}
+
+// Theme
+function getTheme() {
+  const saved = localStorage.getItem('sm-theme');
+  if (saved) return saved;
+  return 'dark';
+}
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  const icon = document.getElementById('themeIcon');
+  icon.setAttribute('d', t === 'dark'
+    ? 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z'
+    : 'M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z');
+  const logo = document.getElementById('headerLogo');
+  if (logo) logo.src = t === 'dark' ? '/logo-white.svg' : '/logo-dark.svg';
+}
+function toggleTheme() {
+  const t = getTheme() === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('sm-theme', t);
+  applyTheme(t);
+  if (chart) loadChart();
+}
+applyTheme(getTheme());
+
+// Navigation
+async function showPage(name) {
+  if (name === 'settings') {
+    try {
+      const headers = sessionToken ? { 'X-Session-Token': sessionToken } : {};
+      const auth = await (await fetch(API + '/auth/status', { cache: 'no-store', headers })).json();
+      if (auth.protected && !auth.authenticated) {
+        showLoginModal();
+        return;
+      }
+      const notice = document.getElementById('demoPasswordNotice');
+      const pwInput = document.getElementById('cfg_admin_password');
+      if (auth.demo) {
+        notice.style.display = 'block';
+        pwInput.disabled = true;
+      } else {
+        notice.style.display = 'none';
+        pwInput.disabled = false;
+      }
+    } catch(e) {}
+  }
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelector(`nav button[onclick="showPage('${name}')"]`).classList.add('active');
+  if (name === 'history') loadHistory();
+  if (name === 'settings') loadSettings();
+}
+
+// Toast
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + type + ' show';
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// API helpers
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, { cache: 'no-store', ...opts });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleString();
+}
+
+// Dashboard
+async function loadLatest() {
+  try {
+    const r = await api('/results/latest');
+    document.getElementById('cardDown').innerHTML = `${r.download_mbps.toFixed(1)}<span class="card-unit">Mbps</span>`;
+    document.getElementById('cardUp').innerHTML = `${r.upload_mbps.toFixed(1)}<span class="card-unit">Mbps</span>`;
+    document.getElementById('cardPing').innerHTML = `${r.ping_ms.toFixed(1)}<span class="card-unit">ms</span>`;
+    document.getElementById('cardJitter').innerHTML = `${(r.jitter_ms||0).toFixed(1)}<span class="card-unit">ms</span>`;
+    document.getElementById('lastTestTime').textContent = 'Last test: ' + fmtDate(r.timestamp);
+    let bars = [];
+    if (r.server_name) bars.push(`<span>Server: <strong>${r.server_name}</strong></span>`);
+    if (r.isp) bars.push(`<span>ISP: <strong>${r.isp}</strong></span>`);
+    document.getElementById('serverBar').innerHTML = bars.join('');
+  } catch(e) {
+    document.getElementById('lastTestTime').textContent = "Welcome! Click 'Run Test' to get started.";
+  }
+}
+
+async function loadChart() {
+  const periodMap = { '24h': 24, '7d': 168, '30d': 720 };
+  const hours = periodMap[currentPeriod] || 24;
+  const from = new Date(Date.now() - hours * 3600000).toISOString();
+  const results = await api(`/results?from=${from}&limit=1000&_t=${Date.now()}`);
+  results.reverse();
+
+  const labels = results.map(r => new Date(r.timestamp));
+  const downloads = results.map(r => r.download_mbps);
+  const uploads = results.map(r => r.upload_mbps);
+  const pings = results.map(r => r.ping_ms);
+
+  const style = getComputedStyle(document.documentElement);
+  const textColor = style.getPropertyValue('--text2').trim();
+  const gridColor = style.getPropertyValue('--border').trim();
+
+  if (chart) chart.destroy();
+  const ctx = document.getElementById('speedChart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Download', data: downloads,
+          borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)',
+          fill: true, tension: 0.3, borderWidth: 2, pointRadius: results.length > 30 ? 0 : 3,
+        },
+        {
+          label: 'Upload', data: uploads,
+          borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)',
+          fill: true, tension: 0.3, borderWidth: 2, pointRadius: results.length > 30 ? 0 : 3,
+        },
+        {
+          label: 'Ping', data: pings,
+          borderColor: '#f59e0b', backgroundColor: 'transparent',
+          fill: false, tension: 0.3, borderWidth: 1.5, pointRadius: results.length > 30 ? 0 : 2,
+          yAxisID: 'ping',
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: textColor, usePointStyle: true, pointStyle: 'circle', padding: 16, font: { size: 11 } },
+        },
+        tooltip: {
+          titleFont: { size: 12 }, bodyFont: { size: 12 },
+          callbacks: {
+            title: (items) => fmtDate(items[0].parsed.x || labels[items[0].dataIndex]),
+            label: (ctx) => {
+              const unit = ctx.dataset.yAxisID === 'ping' ? ' ms' : ' Mbps';
+              return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + unit;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { tooltipFormat: 'PPp' },
+          ticks: { color: textColor, maxTicksLimit: 6, font: { size: 10 } },
+          grid: { color: gridColor },
+        },
+        y: {
+          position: 'left',
+          title: { display: true, text: 'Mbps', color: textColor, font: { size: 11 } },
+          ticks: { color: textColor, font: { size: 10 } },
+          grid: { color: gridColor },
+          beginAtZero: true,
+        },
+        ping: {
+          position: 'right',
+          title: { display: true, text: 'ms', color: textColor, font: { size: 11 } },
+          ticks: { color: textColor, font: { size: 10 } },
+          grid: { drawOnChartArea: false },
+          beginAtZero: true,
+        },
+      },
+    },
+  });
+}
+
+// Period buttons
+document.getElementById('periodBtns').addEventListener('click', e => {
+  if (e.target.tagName !== 'BUTTON') return;
+  document.querySelectorAll('#periodBtns button').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  currentPeriod = e.target.dataset.period;
+  loadChart();
+});
+
+// Run test
+async function runTest() {
+  const btn = document.getElementById('testBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;"></div> Testing...';
+
+  try {
+    await api('/speedtest/run', { method: 'POST' });
+    document.getElementById('progressContainer').classList.add('active');
+    startPolling();
+  } catch(e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Run Test';
+  }
+}
+
+let finalDownload = 0;
+
+async function resetGauge() {
+  finalDownload = 0;
+  await fetchGaugeMax();
+  document.getElementById('gaugeStarting').style.display = 'flex';
+  document.getElementById('gaugeContent').style.display = 'none';
+  document.getElementById('gaugeArcDl').setAttribute('stroke-dasharray', '0 ' + ARC_LEN);
+  document.getElementById('gaugeArcUl').setAttribute('stroke-dasharray', '0 ' + ARC_LEN);
+  document.getElementById('needleDl').setAttribute('transform', 'rotate(-90, 150, 150)');
+  document.getElementById('needleUl').setAttribute('transform', 'rotate(-90, 150, 150)');
+  document.getElementById('gaugePhase').textContent = '';
+  document.getElementById('gaugeSpeed').textContent = '—';
+  document.getElementById('gResDown').className = 'gauge-result-item dl inactive';
+  document.getElementById('gResUp').className = 'gauge-result-item ul inactive';
+  document.getElementById('gResPing').className = 'gauge-result-item ping inactive';
+  document.getElementById('gResDownVal').textContent = '—';
+  document.getElementById('gResUpVal').textContent = '—';
+  document.getElementById('gResPingVal').textContent = '—';
+}
+
+async function startPolling() {
+  await resetGauge();
+
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const s = await api(`/speedtest/status?_t=${Date.now()}`);
+
+      if (s.phase === 'ping') {
+        document.getElementById('gaugeStarting').style.display = 'none';
+        document.getElementById('gaugeContent').style.display = '';
+        document.getElementById('gaugePhase').textContent = 'PING';
+        document.getElementById('gaugeSpeed').innerHTML = '<div class="spinner"></div>';
+        document.getElementById('gaugeUnit').textContent = '';
+        if (s.ping_ms > 0) {
+          document.getElementById('gResPing').className = 'gauge-result-item ping';
+          document.getElementById('gResPingVal').textContent = s.ping_ms.toFixed(1);
+          document.getElementById('gaugeSpeed').textContent = s.ping_ms.toFixed(1);
+          document.getElementById('gaugeUnit').textContent = 'ms';
+        }
+      }
+
+      if (s.phase === 'download') {
+        document.getElementById('gaugeStarting').style.display = 'none';
+        document.getElementById('gaugeContent').style.display = '';
+        document.getElementById('gaugePhase').textContent = 'DOWNLOAD';
+        document.getElementById('gaugeUnit').textContent = 'Mbps';
+
+        // Auto-scale gauge
+        if (s.download_mbps > gaugeMaxSpeed * 0.8) setGaugeMax(s.download_mbps);
+
+        // Update gauge needle & arc
+        const angle = speedToAngle(s.download_mbps);
+        document.getElementById('needleDl').setAttribute('transform', `rotate(${angle}, 150, 150)`);
+        document.getElementById('gaugeArcDl').setAttribute('stroke-dasharray', speedToArc(s.download_mbps));
+        document.getElementById('gaugeSpeed').textContent = s.download_mbps.toFixed(0);
+
+        // Side results
+        document.getElementById('gResPing').className = 'gauge-result-item ping';
+        document.getElementById('gResPingVal').textContent = s.ping_ms.toFixed(1);
+        document.getElementById('gResDown').className = 'gauge-result-item dl';
+        document.getElementById('gResDownVal').textContent = s.download_mbps.toFixed(0);
+        finalDownload = s.download_mbps;
+      }
+
+      if (s.phase === 'upload') {
+        document.getElementById('gaugePhase').textContent = 'UPLOAD';
+        document.getElementById('gaugeUnit').textContent = 'Mbps';
+
+        // Auto-scale for upload too
+        if (s.upload_mbps > gaugeMaxSpeed * 0.8) setGaugeMax(Math.max(finalDownload, s.upload_mbps));
+
+        // Move upload needle, keep download needle at final position
+        const dlAngle = speedToAngle(finalDownload);
+        document.getElementById('needleDl').setAttribute('transform', `rotate(${dlAngle}, 150, 150)`);
+        document.getElementById('gaugeArcDl').setAttribute('stroke-dasharray', speedToArc(finalDownload));
+
+        const ulAngle = speedToAngle(s.upload_mbps);
+        document.getElementById('needleUl').setAttribute('transform', `rotate(${ulAngle}, 150, 150)`);
+        document.getElementById('gaugeArcUl').setAttribute('stroke-dasharray', speedToArc(s.upload_mbps));
+        document.getElementById('gaugeSpeed').textContent = s.upload_mbps.toFixed(0);
+
+        // Side results — download done
+        document.getElementById('gResDown').className = 'gauge-result-item dl';
+        document.getElementById('gResDownVal').textContent = finalDownload.toFixed(0);
+        document.getElementById('gResUp').className = 'gauge-result-item ul';
+        document.getElementById('gResUpVal').textContent = s.upload_mbps.toFixed(0);
+      }
+
+      if (!s.running && (s.phase === 'complete' || s.phase === 'error' || s.phase === 'idle')) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+
+        if (s.phase === 'complete') {
+          document.getElementById('gaugePhase').textContent = 'COMPLETE';
+          document.getElementById('gResDownVal').textContent = s.download_mbps.toFixed(0);
+          document.getElementById('gResUpVal').textContent = s.upload_mbps.toFixed(0);
+          document.getElementById('gResDown').className = 'gauge-result-item dl';
+          document.getElementById('gResUp').className = 'gauge-result-item ul';
+          document.getElementById('gaugeSpeed').textContent = '';
+          document.getElementById('gaugeUnit').textContent = '';
+        }
+
+        setTimeout(() => {
+          document.getElementById('progressContainer').classList.remove('active');
+          const btn = document.getElementById('testBtn');
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Run Test';
+          loadLatest();
+          loadChart();
+          if (s.phase === 'complete') toast('Speed test completed!');
+          else if (s.phase === 'error') toast('Speed test failed', 'error');
+        }, 2000);
+      }
+    } catch(e) {}
+  }, 500);
+}
+
+// History
+function sortHistory(col) {
+  if (historySortBy === col) {
+    historySortDir = historySortDir === 'desc' ? 'asc' : 'desc';
+  } else {
+    historySortBy = col;
+    historySortDir = col === 'timestamp' ? 'desc' : 'desc';
+  }
+  historyPage = 0;
+  loadHistory();
+}
+
+function updateSortIndicators() {
+  for (const c of ['timestamp','download_mbps','upload_mbps','ping_ms']) {
+    const el = document.getElementById('sort-' + c);
+    if (el) el.textContent = c === historySortBy ? (historySortDir === 'desc' ? '▼' : '▲') : '';
+  }
+}
+
+async function loadHistory() {
+  updateSortIndicators();
+  const results = await api(`/results?limit=${PAGE_SIZE}&offset=${historyPage * PAGE_SIZE}&sort_by=${historySortBy}&sort_dir=${historySortDir}&_t=${Date.now()}`);
+  const count = (await api(`/count?_t=${Date.now()}`)).count;
+  const body = document.getElementById('historyBody');
+  body.innerHTML = results.map(r => `<tr>
+    <td>${fmtDate(r.timestamp)}</td>
+    <td><strong>${r.download_mbps.toFixed(1)}</strong> Mbps</td>
+    <td><strong>${r.upload_mbps.toFixed(1)}</strong> Mbps</td>
+    <td>${r.ping_ms.toFixed(1)} ms</td>
+    <td>${r.server_name || '—'}</td>
+    <td>${r.result_url ? `<a href="${r.result_url}" target="_blank">View</a>` : '—'}</td>
+  </tr>`).join('');
+
+  const pages = Math.ceil(count / PAGE_SIZE);
+  const pag = document.getElementById('historyPagination');
+  if (pages <= 1) { pag.innerHTML = ''; return; }
+  let html = '';
+  for (let i = 0; i < pages && i < 10; i++) {
+    html += `<button style="padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:${i===historyPage?'var(--accent)':'var(--bg2)'}; color:${i===historyPage?'#fff':'var(--text2)'}; cursor:pointer; font-size:12px;" onclick="historyPage=${i};loadHistory()">${i+1}</button>`;
+  }
+  pag.innerHTML = html;
+}
+
+function exportData() {
+  window.open(API + '/export?format=csv', '_blank');
+}
+
+// Settings
+async function loadSettings() {
+  const config = await authApi(`/config?_t=${Date.now()}`);
+  const fields = ['interval_minutes','server_id','retention_days','admin_password','mqtt_broker','mqtt_port',
+    'mqtt_user','mqtt_pass','mqtt_topic_prefix','mqtt_ha_discovery_prefix',
+    'telegram_bot_token','telegram_chat_id','webhook_url',
+    'notify_on_complete','notify_on_threshold','threshold_download_mbps','threshold_upload_mbps'];
+  fields.forEach(f => {
+    const el = document.getElementById('cfg_' + f);
+    if (!el) return;
+    if (config[f] === '••••••••') return;
+    el.value = config[f] || '';
+  });
+
+  try {
+    const servers = await api(`/servers?_t=${Date.now()}`);
+    const sel = document.getElementById('cfg_server_id');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Auto (nearest)</option>';
+    servers.forEach(s => {
+      sel.innerHTML += `<option value="${s.id}" ${s.id == current ? 'selected' : ''}>${s.name} — ${s.location}, ${s.country}</option>`;
+    });
+    if (current) sel.value = current;
+  } catch(e) {}
+}
+
+async function saveSettings() {
+  const fields = ['interval_minutes','server_id','retention_days','admin_password','mqtt_broker','mqtt_port',
+    'mqtt_user','mqtt_pass','mqtt_topic_prefix','mqtt_ha_discovery_prefix',
+    'telegram_bot_token','telegram_chat_id','webhook_url',
+    'notify_on_complete','notify_on_threshold','threshold_download_mbps','threshold_upload_mbps'];
+  const updates = {};
+  fields.forEach(f => {
+    const el = document.getElementById('cfg_' + f);
+    if (!el) return;
+    const v = el.value;
+    if (v === '••••••••') return;
+    updates[f] = v;
+  });
+  try {
+    await authApi('/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    toast('Settings saved!');
+    loadSettings();
+  } catch(e) {
+    toast('Failed to save settings', 'error');
+  }
+}
+
+// Check if test is running on page load
+async function checkRunning() {
+  try {
+    const s = await api(`/speedtest/status?_t=${Date.now()}`);
+    if (s.running) {
+      document.getElementById('testBtn').disabled = true;
+      document.getElementById('testBtn').innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;"></div> Testing...';
+      document.getElementById('progressContainer').classList.add('active');
+      startPolling();
+    }
+  } catch(e) {}
+}
+
+// Init
+fetchGaugeMax();
+loadLatest();
+loadChart();
+checkRunning();
+</script>
+</body>
+</html>

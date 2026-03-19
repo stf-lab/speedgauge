@@ -1,0 +1,10 @@
+data/
+.git/
+.gitignore
+README.md
+CHANGELOG.md
+LICENSE
+*.md
+__pycache__/
+*.pyc
+.DS_Store

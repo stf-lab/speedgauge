@@ -1,0 +1,11 @@
+services:
+  speedgauge:
+    image: stflab/speedgauge:latest
+    container_name: speedgauge
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=Europe/Paris
+    restart: unless-stopped
