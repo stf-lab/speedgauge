@@ -430,11 +430,13 @@ tr:hover td { background:var(--bg3); }
     <h3>Admin Login</h3>
     <p>Enter the admin password to access settings.</p>
     <div class="login-error" id="loginError">Invalid password</div>
-    <input type="password" id="loginPassword" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
-    <div class="modal-btns">
-      <button class="cancel-btn" onclick="closeLogin()">Cancel</button>
-      <button class="login-btn" onclick="doLogin()">Login</button>
-    </div>
+    <form id="loginForm" onsubmit="event.preventDefault();doLogin();" autocomplete="on">
+      <input type="password" id="loginPassword" name="password" autocomplete="current-password" placeholder="Password">
+      <div class="modal-btns">
+        <button type="button" class="cancel-btn" onclick="closeLogin()">Cancel</button>
+        <button type="submit" class="login-btn">Login</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -456,15 +458,19 @@ let sessionToken = localStorage.getItem('sm-session') || '';
 // Gauge constants
 const ARC_LEN = 393; // approx arc length of semicircle r=125
 let gaugeMaxSpeed = 10000; // auto-set from API
+let gaugeMaxSource = 'auto';
 
 async function fetchGaugeMax() {
   try {
     const res = await api(`/gauge-max?_t=${Date.now()}`);
     gaugeMaxSpeed = res.max;
+    gaugeMaxSource = res.source || 'auto';
   } catch(e) {}
 }
 
 function setGaugeMax(speed) {
+  // Never override user-configured ISP limit
+  if (gaugeMaxSource === 'manual') return;
   const tiers = [50, 100, 200, 500, 1000, 2000, 5000, 10000];
   const newMax = tiers.find(t => t >= speed * 1.25) || 10000;
   if (newMax > gaugeMaxSpeed) {
@@ -526,7 +532,7 @@ async function doLogin() {
     setSession(res.token);
     document.getElementById('loginModal').classList.remove('show');
     toast('Logged in!');
-    loadSettings();
+    showPage('settings');
   } catch(e) {
     document.getElementById('loginError').style.display = 'block';
   }
