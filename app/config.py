@@ -22,6 +22,7 @@ DEFAULTS = {
     "retention_days": "0",
     "theme": "auto",
     "admin_password": "",
+    "gauge_max_mbps": "0",
 }
 
 _lock = threading.Lock()

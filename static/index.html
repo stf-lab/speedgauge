@@ -345,6 +345,11 @@ tr:hover td { background:var(--bg3); }
         <div class="hint">0 = keep forever</div>
       </div>
       <div class="form-group">
+        <label>Gauge Max (Mbps)</label>
+        <input type="number" id="cfg_gauge_max_mbps" min="0" step="1">
+        <div class="hint">Set to your ISP plan speed (e.g. 500). Leave 0 for auto-detection from 7-day average.</div>
+      </div>
+      <div class="form-group">
         <label>Admin Password</label>
         <input type="password" id="cfg_admin_password" placeholder="Leave empty to disable">
         <div class="hint">Protects Settings page. Leave empty for no protection.</div>
@@ -460,7 +465,11 @@ async function fetchGaugeMax() {
 }
 
 function setGaugeMax(speed) {
-  // no-op, max is set by fetchGaugeMax
+  const tiers = [50, 100, 200, 500, 1000, 2000, 5000, 10000];
+  const newMax = tiers.find(t => t >= speed * 1.25) || 10000;
+  if (newMax > gaugeMaxSpeed) {
+    gaugeMaxSpeed = newMax;
+  }
 }
 
 function speedToAngle(speed) {
@@ -772,8 +781,8 @@ async function startPolling() {
         document.getElementById('gaugePhase').textContent = 'DOWNLOAD';
         document.getElementById('gaugeUnit').textContent = 'Mbps';
 
-        // Auto-scale gauge
-        if (s.download_mbps > gaugeMaxSpeed * 0.8) setGaugeMax(s.download_mbps);
+        // Auto-scale gauge if speed exceeds max
+        if (s.download_mbps > gaugeMaxSpeed) setGaugeMax(s.download_mbps);
 
         // Update gauge needle & arc
         const angle = speedToAngle(s.download_mbps);
@@ -794,7 +803,7 @@ async function startPolling() {
         document.getElementById('gaugeUnit').textContent = 'Mbps';
 
         // Auto-scale for upload too
-        if (s.upload_mbps > gaugeMaxSpeed * 0.8) setGaugeMax(Math.max(finalDownload, s.upload_mbps));
+        if (s.upload_mbps > gaugeMaxSpeed) setGaugeMax(Math.max(finalDownload, s.upload_mbps));
 
         // Move upload needle, keep download needle at final position
         const dlAngle = speedToAngle(finalDownload);
@@ -892,7 +901,7 @@ function exportData() {
 // Settings
 async function loadSettings() {
   const config = await authApi(`/config?_t=${Date.now()}`);
-  const fields = ['interval_minutes','server_id','retention_days','admin_password','mqtt_broker','mqtt_port',
+  const fields = ['interval_minutes','server_id','retention_days','gauge_max_mbps','admin_password','mqtt_broker','mqtt_port',
     'mqtt_user','mqtt_pass','mqtt_topic_prefix','mqtt_ha_discovery_prefix',
     'telegram_bot_token','telegram_chat_id','webhook_url',
     'notify_on_complete','notify_on_threshold','threshold_download_mbps','threshold_upload_mbps'];
@@ -916,7 +925,7 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-  const fields = ['interval_minutes','server_id','retention_days','admin_password','mqtt_broker','mqtt_port',
+  const fields = ['interval_minutes','server_id','retention_days','gauge_max_mbps','admin_password','mqtt_broker','mqtt_port',
     'mqtt_user','mqtt_pass','mqtt_topic_prefix','mqtt_ha_discovery_prefix',
     'telegram_bot_token','telegram_chat_id','webhook_url',
     'notify_on_complete','notify_on_threshold','threshold_download_mbps','threshold_upload_mbps'];

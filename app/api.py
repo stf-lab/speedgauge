@@ -213,23 +213,28 @@ def api_export(
 
 @router.get("/gauge-max")
 def api_gauge_max():
-    """Return recommended gauge max based on average download speed."""
+    """Return gauge max: user-configured ISP limit or auto from 7-day average."""
+    config = get_config()
+    user_max = int(config.get("gauge_max_mbps", 0) or 0)
+    if user_max > 0:
+        return {"max": user_max, "source": "manual"}
+
     stats = get_stats(period="7d")
     avg = stats.get("avg_download") or 0
     if avg >= 5000:
-        return {"max": 10000}
+        return {"max": 10000, "source": "auto"}
     elif avg >= 2000:
-        return {"max": 5000}
+        return {"max": 5000, "source": "auto"}
     elif avg >= 500:
-        return {"max": 2000}
+        return {"max": 2000, "source": "auto"}
     elif avg >= 200:
-        return {"max": 1000}
+        return {"max": 1000, "source": "auto"}
     elif avg >= 50:
-        return {"max": 500}
+        return {"max": 500, "source": "auto"}
     elif avg >= 10:
-        return {"max": 100}
+        return {"max": 100, "source": "auto"}
     else:
-        return {"max": 10000}  # no data yet, default high
+        return {"max": 10000, "source": "auto"}  # no data yet, default high
 
 
 @router.get("/health")
