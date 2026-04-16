@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
     mqtt_disconnect(config)
 
 
-app = FastAPI(title="SpeedGauge", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="SpeedGauge", version="1.4.0", lifespan=lifespan)
 
 app.include_router(api_router)
 

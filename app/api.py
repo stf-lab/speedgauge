@@ -244,4 +244,4 @@ def api_health():
 
 @router.get("/version")
 def api_version():
-    return {"version": "1.0.0"}
+    return {"version": "1.4.0"}

@@ -17,7 +17,7 @@ def _get_discovery_configs(prefix: str, topic_prefix: str) -> list[tuple[str, di
         "name": "SpeedGauge",
         "manufacturer": "Custom",
         "model": "SpeedGauge",
-        "sw_version": "1.0.0",
+        "sw_version": "1.4.0",
     }
     state_topic = f"{topic_prefix}/state"
     avail_topic = f"{topic_prefix}/availability"
