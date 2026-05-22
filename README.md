@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="static/logo-dark.svg" alt="SpeedGauge" height="60">
+  <a href="https://speedgauge.tovu.net">
+    <img src="static/logo-dark.svg" alt="SpeedGauge" height="60">
+  </a>
 </p>
 
 A self-hosted internet speed monitoring tool with a real-time dashboard and Home Assistant integration. Track your connection performance over time with automatic Ookla speed tests, beautiful charts, and instant notifications when speeds drop below your thresholds.
